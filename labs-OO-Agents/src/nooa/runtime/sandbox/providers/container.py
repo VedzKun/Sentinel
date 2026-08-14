@@ -131,10 +131,37 @@ class ContainerSandboxProvider(LocalProcessSandboxProvider):
             "spec": self._spec,
         }
         
+        cmd = ["docker", "run", "-i", "--rm"]
+
+        # 1. Network Isolation
+        if self._spec.block_network:
+            cmd.append("--network=none")
+
+        # 2. Filesystem Controls
+        if self._spec.filesystem:
+            cmd.append("--read-only")
+            cmd.append("--tmpfs=/tmp:rw,size=64m,mode=1777")
+            if self.config.workspace:
+                cmd.extend(["-v", f"{self.config.workspace}:{self.config.workspace}:rw"])
+            for rule in self.config.allow:
+                mode = "rw" if rule.access == "read_write" else "ro"
+                cmd.extend(["-v", f"{rule.path}:{rule.path}:{mode}"])
+
+        # 3. Resource Constraints
+        if self._spec.max_memory_mb > 0:
+            cmd.append(f"--memory={self._spec.max_memory_mb}m")
+        # Standard robust container constraints
+        cmd.extend(["--cpus=1.0", "--pids-limit=64"])
+
+        # 4. Syscall Hardening
+        cmd.extend(["--security-opt=no-new-privileges", "--cap-drop=ALL"])
+
+        cmd.append("nooa-sandbox-worker")
+
         # Launch the docker container with interactive stdio
         try:
             proc = subprocess.Popen(
-                ["docker", "run", "-i", "--rm", "nooa-sandbox-worker"],
+                cmd,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,  # Keep stderr clean from our pipe
