@@ -131,12 +131,14 @@ class ContainerSandboxProvider(LocalProcessSandboxProvider):
         from nooa.runtime.sandbox.config import resolve_spec
         from nooa.runtime.sandbox.base import BaseSandboxProvider
         import asyncio
+        import tempfile
+        import subprocess
         
         # Initialize BaseSandboxProvider directly to bypass LocalProcessSandboxProvider's
         # Unix-specific 'resource' module capability checks (Docker handles capabilities)
         BaseSandboxProvider.__init__(self, config)
         self._agent = agent
-        self._cell_timeout = cell_timeout
+        self.cell_timeout = cell_timeout
         self._framework_builtins = framework_builtins or {}
         self._restrictions = restrictions
         self._spec = resolve_spec(config)
@@ -149,80 +151,166 @@ class ContainerSandboxProvider(LocalProcessSandboxProvider):
         self._closed = False
         self._disabled = False
 
+        self._container_id: str | None = None
+        self._ipc_dir = tempfile.mkdtemp(prefix="nooa_ipc_")
+        
+        # We start the worker immediately
+        self._start_worker()
+        
+        import atexit
+        atexit.register(self._cleanup_container)
+
     @property
     def provider_name(self) -> str:
         return "container"
+        
+    def _cleanup_container(self):
+        """Forcefully remove the container if it's still running."""
+        import subprocess
+        import os
+        if hasattr(self, "_container_id") and self._container_id:
+            try:
+                subprocess.run(
+                    ["docker", "rm", "-f", self._container_id],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+            except Exception:
+                pass
+        import shutil
+        if os.path.exists(self._ipc_dir):
+            try:
+                shutil.rmtree(self._ipc_dir)
+            except Exception:
+                pass
 
     def _start_worker(self) -> None:
+        """Launch the docker container running the worker."""
+        import os
         import subprocess
+        # Use FileConnection for robust IPC
+        from nooa.runtime.sandbox.worker import FileConnection
+        conn = FileConnection(self._ipc_dir, is_host=True)
 
-        init = {
-            "agent": self._agent,
-            "framework_builtins": self._framework_builtins,
-            "restrictions": self._restrictions,
-            "spec": self._spec,
-        }
+        cmd = [
+            "docker", "run", "-d", "--rm",
+            # We add a stop timeout so the daemon aggressively kills it if it gets stuck
+            "--stop-timeout", "1"
+        ]
         
-        cmd = ["docker", "run", "-i", "--rm"]
-
-        # 1. Network Isolation
+        # 1. Network isolation
         if self._spec.block_network:
             cmd.append("--network=none")
-
-        # 2. Filesystem Controls
-        if self._spec.filesystem:
-            cmd.append("--read-only")
-            cmd.append("--tmpfs=/tmp:rw,size=64m,mode=1777")
-            if self.config.workspace:
-                cmd.extend(["-v", f"{self.config.workspace}:{self.config.workspace}:rw"])
-            for rule in self.config.allow:
-                mode = "rw" if rule.access == "read_write" else "ro"
-                cmd.extend(["-v", f"{rule.path}:{rule.path}:{mode}"])
-
-        # 3. Resource Constraints
-        if self._spec.max_memory_mb > 0:
-            cmd.append(f"--memory={self._spec.max_memory_mb}m")
-        # Standard robust container constraints
-        cmd.extend(["--cpus=1.0", "--pids-limit=64"])
-
-        # 4. Syscall Hardening
-        cmd.extend(["--security-opt=no-new-privileges", "--cap-drop=ALL"])
-
-        cmd.append("nooa-sandbox-worker")
-
-        # Launch the docker container with interactive stdio
-        try:
-            proc = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,  # Keep stderr clean from our pipe
-            )
-        except FileNotFoundError:
-            raise SandboxUnavailable("Docker is not installed or not in PATH")
             
-        class PopenWrapper:
-            def __init__(self, p):
-                self.p = p
-            def is_alive(self):
-                return self.p.poll() is None
-            def poll(self):
-                return self.p.poll()
-            def terminate(self):
-                self.p.terminate()
-            def kill(self):
-                self.p.kill()
-            def wait(self, timeout=None):
-                return self.p.wait(timeout)
+        # 2. Filesystem controls
+        if self.config.filesystem:
+            cmd.append("--read-only")
+            cmd.extend(["--tmpfs", "/tmp:rw,size=64m,mode=1777"])
+            # Mount the workspace if provided
+            if self.config.workspace:
+                workspace_abs = os.path.abspath(self.config.workspace)
+                # Map to /workspace in Linux container instead of absolute host path to avoid colon conflicts
+                cmd.extend(["-v", f"{workspace_abs}:/workspace:rw"])
+            # Mount allowed paths
+            for path in self.config.allow:
+                path_abs = os.path.abspath(path)
+                # For arbitrary allowed paths, mapping them exactly is hard cross-platform.
+                # Let's map them to /allowed/<basename> as a workaround for now, or just /<basename>
+                basename = os.path.basename(path_abs)
+                cmd.extend(["-v", f"{path_abs}:/{basename}:ro"])
                 
-        wrapped_proc = PopenWrapper(proc)
-        conn = ParentStdioConnection(proc)
+        # Mount the IPC directory
+        ipc_abs = os.path.abspath(self._ipc_dir)
+            
+        cmd.extend(["-v", f"{ipc_abs}:/ipc:rw"])
+            
+        # 3. Resource Constraints
+        if self._spec.max_memory_mb:
+            cmd.append(f"--memory={self._spec.max_memory_mb}m")
+        # Prevent fork bombs
+        cmd.append("--pids-limit=64")
+        # CPU limit
+        cmd.append("--cpus=1.0")
         
-        # Send initialization payload over our custom stdio connection
-        conn.send(init)
+        # 4. Syscall Hardening
+        cmd.append("--security-opt=no-new-privileges")
+        cmd.append("--cap-drop=ALL")
+        
+        # Image and entrypoint
+        cmd.append("nooa-sandbox-worker")
+        
+        # Launch the docker container in detached mode to get the container ID
+        try:
+            proc_id = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            self._container_id = proc_id.stdout.strip()
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to start Docker container: {e.stderr}")
+            
+        # We need a dummy process object to satisfy LocalProcessSandboxProvider
+        class DummyProc:
+            def __init__(self, container_id):
+                self.container_id = container_id
+            def is_alive(self):
+                if not self.container_id:
+                    return False
+                try:
+                    res = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", self.container_id], capture_output=True, text=True)
+                    return res.stdout.strip() == "true"
+                except Exception:
+                    return False
+            def poll(self):
+                if self.is_alive():
+                    return None
+                try:
+                    res = subprocess.run(["docker", "inspect", "-f", "{{.State.ExitCode}}", self.container_id], capture_output=True, text=True)
+                    code = res.stdout.strip()
+                    return int(code) if code.isdigit() else 1
+                except Exception:
+                    return 1
+            def terminate(self):
+                pass
+            def kill(self):
+                pass
+            def wait(self, timeout=None):
+                pass
+                
+        wrapped_proc = DummyProc(self._container_id)
+        
+        from dataclasses import replace
+        from nooa.runtime.sandbox.config import LandlockRule
+        
+        container_spec = self._spec
+        if self._spec and getattr(self.config, "workspace", None):
+            # Create container-side paths for landlock rules
+            new_rules = []
+            for rule in self._spec.landlock_rules:
+                if rule.path == os.path.abspath(self.config.workspace):
+                    new_rules.append(replace(rule, path="/workspace"))
+                else:
+                    new_rules.append(replace(rule, path=f"/{os.path.basename(rule.path)}"))
+            # Allow IPC directory
+            new_rules.append(LandlockRule(path="/ipc", write=True, required=True))
+            container_spec = replace(self._spec, landlock_rules=tuple(new_rules))
 
-        self._conn = conn
+        # Initialize the worker process exactly like local does
+        init = {
+            "agent": self._agent,
+            "framework_builtins": getattr(self, "_framework_builtins", {}),
+            "restrictions": getattr(self, "_restrictions", None),
+            "spec": container_spec
+        }
+        
+        # Write the init payload to IPC using our connection
+        conn.send(init)
+        
         self._proc = wrapped_proc
+        self._conn = conn
 
     def _detach_worker(self) -> Any:
         proc, conn = self._proc, getattr(self, "_conn", None)

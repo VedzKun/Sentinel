@@ -426,8 +426,10 @@ def worker_main(conn: Connection, init: dict[str, Any]) -> None:  # pragma: no c
         while True:
             try:
                 request = conn.recv()
-            except (EOFError, OSError):
-                return
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                raise e
             op = request.get("op")
             req_id = request.get("id")
             if op == "shutdown":
@@ -496,14 +498,89 @@ class StdioConnection:
         pass
 
 
+class FileConnection:
+    """A wrapper mimicking multiprocessing.Connection over a shared directory."""
+    def __init__(self, ipc_dir: str, is_host: bool = False) -> None:
+        import os
+        self.ipc_dir = ipc_dir
+        self.is_host = is_host
+        self.send_counter = 0
+        self.recv_counter = 0
+        
+    def _send_file(self) -> str:
+        import os
+        prefix = "host_to_worker" if self.is_host else "worker_to_host"
+        return os.path.join(self.ipc_dir, f"{prefix}_{self.send_counter}.pkl")
+        
+    def _recv_file(self) -> str:
+        import os
+        prefix = "worker_to_host" if self.is_host else "host_to_worker"
+        return os.path.join(self.ipc_dir, f"{prefix}_{self.recv_counter}.pkl")
+
+    def send(self, obj: Any) -> None:
+        import time
+        import os
+        payload = pickle.dumps(obj)
+        target = self._send_file()
+        tmp_target = target + ".tmp"
+        with open(tmp_target, "wb") as f:
+            f.write(payload)
+        os.replace(tmp_target, target)
+        self.send_counter += 1
+
+    def recv(self) -> Any:
+        import time
+        import os
+        target = self._recv_file()
+        # Wait for file to exist and have content
+        payload = b''
+        while not payload:
+            if os.path.exists(target):
+                try:
+                    with open(target, "rb") as f:
+                        payload = f.read()
+                except OSError:
+                    pass
+            if not payload:
+                time.sleep(0.01)
+                
+        self.recv_counter += 1
+        return pickle.loads(payload)
+
+    def poll(self, timeout: float | None = 0.0) -> bool:
+        import time
+        import os
+        target = self._recv_file()
+        if os.path.exists(target):
+            return True
+        if timeout is None or timeout <= 0:
+            return False
+        start = time.time()
+        while time.time() - start < timeout:
+            if os.path.exists(target):
+                return True
+            time.sleep(0.01)
+        return False
+
+    def close(self) -> None:
+        pass
+
+
 if __name__ == "__main__":
     import sys
+    import os
     
     # Read the initialization payload
-    conn = StdioConnection()
+    if os.path.exists("/ipc"):
+        conn = FileConnection("/ipc", is_host=False)
+    else:
+        conn = StdioConnection()
+        
     try:
         init_payload = conn.recv()
-    except EOFError:
-        sys.exit(1)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise e
         
     worker_main(conn, init_payload)

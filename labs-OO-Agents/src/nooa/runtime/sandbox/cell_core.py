@@ -147,6 +147,7 @@ async def run_cell_source(
                     implicit_return_added = True
 
             # Names to declare ``global`` so REPL rebinds (``x = x + 1``) work.
+            import keyword
             global_vars = [
                 name
                 for name, val in namespace.items()
@@ -155,6 +156,7 @@ async def run_cell_source(
                     and name not in ("self", "asyncio", "__builtins__")
                     and not callable(val)
                     and not isinstance(val, types.ModuleType)
+                    and not keyword.iskeyword(name)
                 )
             ]
             global_decl = f"    global {', '.join(global_vars)}\n" if global_vars else ""

@@ -17,7 +17,7 @@ async def main():
     # 1. Configure the sandbox to use our new container provider
     # We turn on filesystem controls, block the network, and set a strict 128MB RAM limit.
     config = SandboxConfig(
-        provider="local",
+        provider="container",
         require=False,
         start_method="spawn",
         filesystem=True,
