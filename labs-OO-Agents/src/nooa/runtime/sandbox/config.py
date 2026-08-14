@@ -19,6 +19,7 @@ kernel mechanism (see ``guards.py``):
 
 from __future__ import annotations
 
+import platform
 from dataclasses import dataclass
 from typing import Literal
 
@@ -106,10 +107,9 @@ class SandboxConfig(BaseModel):
     )
 
     # --- process / lifecycle ----------------------------------------------
-    # Only "fork" is supported: the worker init inherits the live agent, the
-    # CurrentCall and the return_result closure, none of which pickle for "spawn".
-    start_method: Literal["fork"] = Field(
-        default="fork", description="multiprocessing start method for the worker (fork only)."
+    start_method: Literal["fork", "spawn"] = Field(
+        default="fork" if platform.system() != "Windows" else "spawn",
+        description="The multiprocessing start method to use for isolated local environments.",
     )
     recovery: Literal["restart_empty", "disabled"] = Field(
         default="restart_empty",

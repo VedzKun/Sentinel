@@ -61,7 +61,12 @@ class SandboxedExecutor:
 
     async def run_cell(self, code: str, *, execution_count: int = 1) -> ExecutionResult:
         """Execute one cell in the configured sandbox provider and return an ``ExecutionResult``."""
-        return await self._provider.run_cell(
+        from nooa.runtime.sandbox.audit import SandboxAuditLogger
+        
+        logger_instance = SandboxAuditLogger()
+        exec_id = logger_instance.log_execution_intent(self._agent, code)
+        
+        result = await self._provider.run_cell(
             code,
             execution_count=execution_count,
             agent=self._agent,
@@ -69,6 +74,9 @@ class SandboxedExecutor:
             framework_builtins=self._framework_builtins,
             restrictions=self._restrictions,
         )
+        
+        logger_instance.log_execution_result(exec_id, result)
+        return result
 
     async def aclose(self) -> None:
         """Async teardown of sandbox provider resources."""

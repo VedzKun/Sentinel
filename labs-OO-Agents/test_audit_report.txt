@@ -1,0 +1,112 @@
+[2024-06-19 17:56:40] execution_started
+  execution_id: exec_1718800000000
+  agent_id: agent_alpha
+  code: import os
+print('Hello from the secure Sandbox!')
+----------------------------------------
+[2024-06-19 17:56:42] execution_completed
+  execution_id: exec_1718800000000
+  stdout: Hello from the secure Sandbox!
+
+  stderr: 
+  error: None
+  violation: None
+----------------------------------------
+[2024-06-19 17:56:50] execution_started
+  execution_id: exec_1718800010000
+  agent_id: agent_alpha
+  code: import urllib.request
+# Trying to reach out to the internet
+urllib.request.urlopen('http://evil.com')
+----------------------------------------
+[2024-06-19 17:56:50] execution_completed
+  execution_id: exec_1718800010000
+  stdout: 
+  stderr: 
+  error: [Errno 13] Permission denied: 'http://evil.com'
+  violation: PERMISSION_DENIED
+----------------------------------------
+[2024-06-19 17:57:00] execution_started
+  execution_id: exec_1718800020000
+  agent_id: agent_alpha
+  code: a = 'x' * 1024 * 1024 * 512 # Try to allocate 512MB RAM
+----------------------------------------
+[2024-06-19 17:57:00] execution_completed
+  execution_id: exec_1718800020000
+  stdout: 
+  stderr: Killed (OOM)
+  error: worker was killed (out-of-memory or resource limit).
+  violation: MEMORY_LIMIT_EXCEEDED
+----------------------------------------
+[2026-08-14 17:49:43] execution_started
+  execution_id: exec_1786709983003
+  agent_id: rogue_agent_99
+  code: open('/etc/passwd', 'r').read()
+----------------------------------------
+[2026-08-14 17:49:43] execution_completed
+  execution_id: exec_1786709983003
+  stdout: 
+  stderr: 
+  error: Permission denied: '/etc/passwd'
+  violation: FILE_SYSTEM_ACCESS_DENIED
+----------------------------------------
+[2026-08-14 17:49:43] execution_started
+  execution_id: exec_1786709983015
+  agent_id: rogue_agent_99
+  code: open('/bin/ls', 'w').write('hacked')
+----------------------------------------
+[2026-08-14 17:49:43] execution_completed
+  execution_id: exec_1786709983015
+  stdout: 
+  stderr: 
+  error: Read-only file system: '/bin/ls'
+  violation: FILE_SYSTEM_ACCESS_DENIED
+----------------------------------------
+[2026-08-14 17:49:43] execution_started
+  execution_id: exec_1786709983029
+  agent_id: rogue_agent_99
+  code: import socket; s = socket.socket(); s.connect(('evil.com', 80))
+----------------------------------------
+[2026-08-14 17:49:43] execution_completed
+  execution_id: exec_1786709983029
+  stdout: 
+  stderr: 
+  error: Network is unreachable
+  violation: FILE_SYSTEM_ACCESS_DENIED
+----------------------------------------
+[2026-08-14 17:49:43] execution_started
+  execution_id: exec_1786709983038
+  agent_id: rogue_agent_99
+  code: a = 'x' * 1024 * 1024 * 1024 # Try to allocate 1GB
+----------------------------------------
+[2026-08-14 17:49:43] execution_completed
+  execution_id: exec_1786709983038
+  stdout: 
+  stderr: Killed
+  error: worker was killed (out-of-memory)
+  violation: MEMORY_LIMIT_EXCEEDED
+----------------------------------------
+[2026-08-14 17:49:43] execution_started
+  execution_id: exec_1786709983047
+  agent_id: rogue_agent_99
+  code: while True: pass
+----------------------------------------
+[2026-08-14 17:49:43] execution_completed
+  execution_id: exec_1786709983047
+  stdout: 
+  stderr: 
+  error: Cell execution timed out
+  violation: TIMEOUT_EXCEEDED
+----------------------------------------
+[2026-08-14 17:49:43] execution_started
+  execution_id: exec_1786709983058
+  agent_id: rogue_agent_99
+  code: import os; os.setuid(0)
+----------------------------------------
+[2026-08-14 17:49:43] execution_completed
+  execution_id: exec_1786709983058
+  stdout: 
+  stderr: 
+  error: Operation not permitted
+  violation: FILE_SYSTEM_ACCESS_DENIED
+----------------------------------------

@@ -1,0 +1,18 @@
+{"timestamp": 1718800000.0, "event_type": "execution_started", "execution_id": "exec_1718800000000", "agent_id": "agent_alpha", "code": "import os\nprint('Hello from the secure Sandbox!')"}
+{"timestamp": 1718800002.5, "event_type": "execution_completed", "execution_id": "exec_1718800000000", "stdout": "Hello from the secure Sandbox!\n", "stderr": "", "error": null, "violation": null}
+{"timestamp": 1718800010.0, "event_type": "execution_started", "execution_id": "exec_1718800010000", "agent_id": "agent_alpha", "code": "import urllib.request\n# Trying to reach out to the internet\nurllib.request.urlopen('http://evil.com')"}
+{"timestamp": 1718800010.2, "event_type": "execution_completed", "execution_id": "exec_1718800010000", "stdout": "", "stderr": "", "error": "[Errno 13] Permission denied: 'http://evil.com'", "violation": "PERMISSION_DENIED"}
+{"timestamp": 1718800020.0, "event_type": "execution_started", "execution_id": "exec_1718800020000", "agent_id": "agent_alpha", "code": "a = 'x' * 1024 * 1024 * 512 # Try to allocate 512MB RAM"}
+{"timestamp": 1718800020.5, "event_type": "execution_completed", "execution_id": "exec_1718800020000", "stdout": "", "stderr": "Killed (OOM)", "error": "worker was killed (out-of-memory or resource limit).", "violation": "MEMORY_LIMIT_EXCEEDED"}
+{"timestamp": 1786709983.0031521, "event_type": "execution_started", "execution_id": "exec_1786709983003", "agent_id": "rogue_agent_99", "code": "open('/etc/passwd', 'r').read()"}
+{"timestamp": 1786709983.0047607, "event_type": "execution_completed", "execution_id": "exec_1786709983003", "stdout": "", "stderr": "", "error": "Permission denied: '/etc/passwd'", "violation": "FILE_SYSTEM_ACCESS_DENIED"}
+{"timestamp": 1786709983.0153306, "event_type": "execution_started", "execution_id": "exec_1786709983015", "agent_id": "rogue_agent_99", "code": "open('/bin/ls', 'w').write('hacked')"}
+{"timestamp": 1786709983.016602, "event_type": "execution_completed", "execution_id": "exec_1786709983015", "stdout": "", "stderr": "", "error": "Read-only file system: '/bin/ls'", "violation": "FILE_SYSTEM_ACCESS_DENIED"}
+{"timestamp": 1786709983.029364, "event_type": "execution_started", "execution_id": "exec_1786709983029", "agent_id": "rogue_agent_99", "code": "import socket; s = socket.socket(); s.connect(('evil.com', 80))"}
+{"timestamp": 1786709983.03074, "event_type": "execution_completed", "execution_id": "exec_1786709983029", "stdout": "", "stderr": "", "error": "Network is unreachable", "violation": "FILE_SYSTEM_ACCESS_DENIED"}
+{"timestamp": 1786709983.0382218, "event_type": "execution_started", "execution_id": "exec_1786709983038", "agent_id": "rogue_agent_99", "code": "a = 'x' * 1024 * 1024 * 1024 # Try to allocate 1GB"}
+{"timestamp": 1786709983.0392654, "event_type": "execution_completed", "execution_id": "exec_1786709983038", "stdout": "", "stderr": "Killed", "error": "worker was killed (out-of-memory)", "violation": "MEMORY_LIMIT_EXCEEDED"}
+{"timestamp": 1786709983.0484078, "event_type": "execution_started", "execution_id": "exec_1786709983047", "agent_id": "rogue_agent_99", "code": "while True: pass"}
+{"timestamp": 1786709983.0502667, "event_type": "execution_completed", "execution_id": "exec_1786709983047", "stdout": "", "stderr": "", "error": "Cell execution timed out", "violation": "TIMEOUT_EXCEEDED"}
+{"timestamp": 1786709983.0582335, "event_type": "execution_started", "execution_id": "exec_1786709983058", "agent_id": "rogue_agent_99", "code": "import os; os.setuid(0)"}
+{"timestamp": 1786709983.0593634, "event_type": "execution_completed", "execution_id": "exec_1786709983058", "stdout": "", "stderr": "", "error": "Operation not permitted", "violation": "FILE_SYSTEM_ACCESS_DENIED"}

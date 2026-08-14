@@ -1,0 +1,40 @@
+[2024-06-19 17:56:40] execution_started
+  execution_id: exec_1718800000000
+  agent_id: agent_alpha
+  code: import os
+print('Hello from the secure Sandbox!')
+----------------------------------------
+[2024-06-19 17:56:42] execution_completed
+  execution_id: exec_1718800000000
+  stdout: Hello from the secure Sandbox!
+
+  stderr: 
+  error: None
+  violation: None
+----------------------------------------
+[2024-06-19 17:56:50] execution_started
+  execution_id: exec_1718800010000
+  agent_id: agent_alpha
+  code: import urllib.request
+# Trying to reach out to the internet
+urllib.request.urlopen('http://evil.com')
+----------------------------------------
+[2024-06-19 17:56:50] execution_completed
+  execution_id: exec_1718800010000
+  stdout: 
+  stderr: 
+  error: [Errno 13] Permission denied: 'http://evil.com'
+  violation: PERMISSION_DENIED
+----------------------------------------
+[2024-06-19 17:57:00] execution_started
+  execution_id: exec_1718800020000
+  agent_id: agent_alpha
+  code: a = 'x' * 1024 * 1024 * 512 # Try to allocate 512MB RAM
+----------------------------------------
+[2024-06-19 17:57:00] execution_completed
+  execution_id: exec_1718800020000
+  stdout: 
+  stderr: Killed (OOM)
+  error: worker was killed (out-of-memory or resource limit).
+  violation: MEMORY_LIMIT_EXCEEDED
+----------------------------------------

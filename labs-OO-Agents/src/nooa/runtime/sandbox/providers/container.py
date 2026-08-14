@@ -79,6 +79,8 @@ class ParentStdioConnection:
         if self._buffered_msg is not None:
             msg = self._buffered_msg
             self._buffered_msg = None
+            if isinstance(msg, EOFError):
+                raise msg
             return msg
         try:
             msg = self._q.get(timeout=0.1)
@@ -116,6 +118,36 @@ class ParentStdioConnection:
 
 class ContainerSandboxProvider(LocalProcessSandboxProvider):
     """Containerized sandbox provider executing cell code inside an isolated OCI container."""
+
+    def __init__(
+        self,
+        config: Any,
+        agent: Any = None,
+        *,
+        cell_timeout: float | None = None,
+        framework_builtins: dict[str, Any] | None = None,
+        restrictions: Any = None,
+    ) -> None:
+        from nooa.runtime.sandbox.config import resolve_spec
+        from nooa.runtime.sandbox.base import BaseSandboxProvider
+        import asyncio
+        
+        # Initialize BaseSandboxProvider directly to bypass LocalProcessSandboxProvider's
+        # Unix-specific 'resource' module capability checks (Docker handles capabilities)
+        BaseSandboxProvider.__init__(self, config)
+        self._agent = agent
+        self._cell_timeout = cell_timeout
+        self._framework_builtins = framework_builtins or {}
+        self._restrictions = restrictions
+        self._spec = resolve_spec(config)
+        self._degraded = []
+        
+        self._proc = None
+        self._conn = None
+        self._lock = asyncio.Lock()
+        self._req_id = 0
+        self._closed = False
+        self._disabled = False
 
     @property
     def provider_name(self) -> str:
@@ -169,13 +201,28 @@ class ContainerSandboxProvider(LocalProcessSandboxProvider):
         except FileNotFoundError:
             raise SandboxUnavailable("Docker is not installed or not in PATH")
             
+        class PopenWrapper:
+            def __init__(self, p):
+                self.p = p
+            def is_alive(self):
+                return self.p.poll() is None
+            def poll(self):
+                return self.p.poll()
+            def terminate(self):
+                self.p.terminate()
+            def kill(self):
+                self.p.kill()
+            def wait(self, timeout=None):
+                return self.p.wait(timeout)
+                
+        wrapped_proc = PopenWrapper(proc)
         conn = ParentStdioConnection(proc)
         
         # Send initialization payload over our custom stdio connection
         conn.send(init)
 
         self._conn = conn
-        self._proc = proc
+        self._proc = wrapped_proc
 
     def _detach_worker(self) -> Any:
         proc, conn = self._proc, getattr(self, "_conn", None)
