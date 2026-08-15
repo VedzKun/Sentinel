@@ -62,8 +62,9 @@ class SandboxedExecutor:
     async def run_cell(self, code: str, *, execution_count: int = 1) -> ExecutionResult:
         """Execute one cell in the configured sandbox provider and return an ``ExecutionResult``."""
         from nooa.runtime.sandbox.audit import SandboxAuditLogger
-        
-        logger_instance = SandboxAuditLogger()
+        logger_instance = SandboxAuditLogger(
+            log_file=self._config.audit_log_path or "sandbox_audit.jsonl"
+        )
         exec_id = logger_instance.log_execution_intent(self._agent, code)
         
         result = await self._provider.run_cell(

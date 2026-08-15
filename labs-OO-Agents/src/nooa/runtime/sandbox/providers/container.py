@@ -228,6 +228,7 @@ class ContainerSandboxProvider(LocalProcessSandboxProvider):
         # 3. Resource Constraints
         if self._spec.max_memory_mb:
             cmd.append(f"--memory={self._spec.max_memory_mb}m")
+            cmd.append(f"--memory-swap={self._spec.max_memory_mb}m")
         # Prevent fork bombs
         cmd.append("--pids-limit=64")
         # CPU limit

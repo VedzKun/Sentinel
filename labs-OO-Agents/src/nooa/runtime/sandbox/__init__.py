@@ -24,6 +24,7 @@ from nooa.runtime.sandbox.errors import (
     WorkerDiedError,
 )
 from nooa.runtime.sandbox.executor import SandboxedExecutor
+from nooa.runtime.sandbox.session import SandboxSession
 from nooa.runtime.sandbox.registry import (
     create_sandbox_provider,
     get_provider_class,
@@ -36,6 +37,7 @@ __all__ = [
     "FileRule",
     "BaseSandboxProvider",
     "SandboxedExecutor",
+    "SandboxSession",
     "register_provider",
     "get_provider_class",
     "list_providers",

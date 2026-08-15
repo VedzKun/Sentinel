@@ -50,6 +50,10 @@ class SandboxConfig(BaseModel):
         default="local",
         description="Execution sandbox provider type: 'local', 'container', or custom registered provider.",
     )
+    audit_log_path: str | None = Field(
+        default=None,
+        description="Path to the audit log file. If None, logs to sandbox_audit.jsonl in cwd.",
+    )
 
     # --- guardrail 3: filesystem ------------------------------------------
     filesystem: bool = Field(
