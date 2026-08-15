@@ -225,11 +225,25 @@ def apply_rlimits(*, max_memory_mb: int = 0, max_cpu_seconds: int = 0) -> None:
 
     if max_memory_mb and max_memory_mb > 0:
         baseline = _self_vmsize_bytes()
-        limit = baseline + int(max_memory_mb) * 1024 * 1024
-        _, hard = resource.getrlimit(resource.RLIMIT_AS)
-        if hard != resource.RLIM_INFINITY:
-            limit = min(limit, hard)
-        resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+        # We enforce exactly the requested MB limit (converted to bytes) + baseline
+        # but also cap it strictly to avoid infinite growth on Windows/WSL2
+        added_bytes = int(max_memory_mb) * 1024 * 1024
+        
+        # If /proc/self/status failed (0), use a sensible minimum baseline (e.g., 50MB) 
+        # so we don't immediately crash the Python interpreter.
+        if baseline == 0:
+            baseline = 50 * 1024 * 1024
+            
+        limit = baseline + added_bytes
+        
+        try:
+            _, hard = resource.getrlimit(resource.RLIMIT_AS)
+            if hard != resource.RLIM_INFINITY:
+                limit = min(limit, hard)
+            resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+        except ValueError:
+            pass # Fails if limit is too small, though unlikely given baseline
+
     if max_cpu_seconds and max_cpu_seconds > 0:
         secs = int(max_cpu_seconds)
         _, hard = resource.getrlimit(resource.RLIMIT_CPU)

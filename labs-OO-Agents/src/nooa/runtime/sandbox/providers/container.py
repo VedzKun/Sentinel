@@ -193,15 +193,31 @@ class ContainerSandboxProvider(LocalProcessSandboxProvider):
         from nooa.runtime.sandbox.worker import FileConnection
         conn = FileConnection(self._ipc_dir, is_host=True)
 
+        # Auto-rebuild the worker image to ensure seamless developer experience
+        src_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
+        try:
+            subprocess.run(
+                ["docker", "build", "-t", "nooa-sandbox-worker", "-f", "Dockerfile.sandbox", "."],
+                cwd=src_dir,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False
+            )
+        except Exception:
+            pass # Fails if Docker is unavailable, which will be caught below
+
         cmd = [
             "docker", "run", "-d", "--rm",
             # We add a stop timeout so the daemon aggressively kills it if it gets stuck
-            "--stop-timeout", "1"
+            "--stop-timeout", "5"
         ]
         
         # 1. Network isolation
         if self._spec.block_network:
             cmd.append("--network=none")
+        else:
+            # Default docker seccomp is quite strict, blocking ptrace etc.
+            cmd.append("--security-opt=no-new-privileges")
             
         # 2. Filesystem controls
         if self.config.filesystem:
@@ -229,6 +245,9 @@ class ContainerSandboxProvider(LocalProcessSandboxProvider):
         if self._spec.max_memory_mb:
             cmd.append(f"--memory={self._spec.max_memory_mb}m")
             cmd.append(f"--memory-swap={self._spec.max_memory_mb}m")
+            # Brutal memory enforcement
+            cmd.append("--oom-kill-disable=false")
+            cmd.append("--memory-swappiness=0")
         # Prevent fork bombs
         cmd.append("--pids-limit=64")
         # CPU limit
@@ -275,9 +294,11 @@ class ContainerSandboxProvider(LocalProcessSandboxProvider):
                 except Exception:
                     return 1
             def terminate(self):
-                pass
+                if self.container_id:
+                    import subprocess
+                    subprocess.run(["docker", "rm", "-f", self.container_id], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             def kill(self):
-                pass
+                self.terminate()
             def wait(self, timeout=None):
                 pass
                 
