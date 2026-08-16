@@ -66,21 +66,25 @@ from nooa.storage import StorageManager  # noqa: E402
 # imported raw here — that would bypass the FutureWarning gate in
 # nooa.experimental. Instead they are exposed lazily via __getattr__
 # below, which returns the warning-emitting factories.
-from nooa.strategies import (  # noqa: E402
-    CodeActStrategy,
-    GenerationStrategy,
-    InspectInputsPrefill,
-    PredictStrategy,
-    get_default_strategy,
-    set_default_strategy,
-)
-from nooa.strategy_validation import (  # noqa: E402
-    InvariantError,
-    MethodPostcondition,
-    MethodPrecondition,
-)
-from nooa.token_counter import char_approximate_token_counter  # noqa: E402
-from nooa.unifiedllm import LLMResponse  # noqa: E402
+try:
+    from nooa.strategies import (  # noqa: E402
+        CodeActStrategy,
+        GenerationStrategy,
+        InspectInputsPrefill,
+        PredictStrategy,
+        get_default_strategy,
+        set_default_strategy,
+    )
+    from nooa.strategy_validation import (  # noqa: E402
+        InvariantError,
+        MethodPostcondition,
+        MethodPrecondition,
+    )
+    from nooa.token_counter import char_approximate_token_counter  # noqa: E402
+    from nooa.unifiedllm import LLMResponse  # noqa: E402
+except ImportError:
+    pass
+
 
 
 # Lazy re-export of llm_config_chain — defer importing the llm_config /

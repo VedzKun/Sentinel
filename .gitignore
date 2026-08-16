@@ -1,1 +1,42 @@
-# labs-OO-Agents/
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary workspace & audit outputs
+workspace/cli_audit/
+workspace/*_repo/
+workspace/target_repo/
+my_agent/workspace/cli_audit/
+my_agent/workspace/target_repo/
+my_agent/workspace/.audit/
+.audit/

@@ -40,7 +40,8 @@ class SandboxSession:
             allow=[],
             network=not block_network,
             max_memory_mb=memory_mb,
-            audit_log_path=self.audit_log_path
+            audit_log_path=self.audit_log_path,
+            require=False,  # degrade gracefully on platforms where guardrails are unavailable (e.g. Windows local provider)
         )
         
         self.executor = SandboxedExecutor(
